@@ -3,6 +3,8 @@
 Load a GLSL fragment shader, preview it live, and export it as a frame-accurate
 1080p or 4K MP4 (H.264, HEVC, VP9 or AV1), entirely in the browser.
 
+**Try it: https://thinkinsound.github.io/shader-render/**
+
 ## Use it online (GitHub Pages)
 
 The app is a static site: plain HTML, CSS and JavaScript with no build step and no server code,
