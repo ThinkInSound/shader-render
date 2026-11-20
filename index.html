@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shader Render</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>Shader Render</div>
+    <div class="toolbar">
+      <select id="exampleSelect" title="Load an example shader">
+        <option value="" selected disabled>Examples…</option>
+      </select>
+      <button id="openBtn" title="Open a .glsl / .frag file (or drop one on the window)">Open…</button>
+      <button id="saveBtn" title="Download the shader (Ctrl+S)">Save</button>
+      <button id="imgShaderBtn" title="Turn a screenshot or image into a shader">Image → Shader</button>
+      <span class="sep"></span>
+      <label class="check"><input type="checkbox" id="autoCompile" checked> Auto-compile</label>
+      <button id="compileBtn" class="primary" title="Compile (Ctrl+Enter)">Compile <kbd>Ctrl ↵</kbd></button>
+    </div>
+    <input type="file" id="fileInput" accept=".glsl,.frag,.fs,.fsh,.shader,.txt,text/plain" hidden>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main class="layout">
+    <section class="pane editor-pane">
+      <div class="pane-head">
+        <span id="fileName" class="file-name">untitled.glsl</span>
+        <span id="modeBadge" class="badge" title="Detected shader dialect">—</span>
+      </div>
+      <div class="tab-bar">
+        <div id="tabs" class="tabs" role="tablist" aria-label="Shader passes"></div>
+        <select id="addTab" class="add-tab" title="Add a Common code tab or a Buffer pass" aria-label="Add tab">
+          <option value="">+ Add buffer / Common</option>
+        </select>
+      </div>
+      <div id="editor" class="editor"></div>
+      <div id="log" class="log"></div>
+    </section>
+
+    <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize editor"
+         tabindex="0" title="Drag to resize · double-click to reset"></div>
+
+    <section class="pane side-pane">
+      <div class="preview-wrap">
+        <div id="previewBox" class="preview-box">
+          <canvas id="preview"></canvas>
+          <div id="hud" class="hud mono"></div>
+          <div id="exportOverlay" class="overlay" hidden>Preview paused while exporting</div>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button id="playBtn" class="icon" title="Play / pause (Space)" aria-label="Play or pause">
+          <svg id="iconPause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          <svg id="iconPlay" viewBox="0 0 24 24" hidden><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
+        </button>
+        <button id="restartBtn" class="icon" title="Jump to export start" aria-label="Restart">
+          <svg viewBox="0 0 24 24"><rect x="5" y="5" width="3" height="14" rx="1"/><path d="M19 6.2v11.6a1 1 0 0 1-1.55.83L9.8 13.2a1.4 1.4 0 0 1 0-2.4l7.65-5.43A1 1 0 0 1 19 6.2z"/></svg>
+        </button>
+        <input type="range" id="scrub" min="0" max="10" step="0.001" value="0" aria-label="Time">
+        <span id="timeLabel" class="mono time-label">0.00s</span>
+        <label class="check small" title="Keep preview time inside the export start/duration window"><input type="checkbox" id="loopRange" checked> Loop range</label>
+        <select id="previewScale" title="Preview resolution">
+          <option value="1">Full res</option>
+          <option value="0.5">Half res</option>
+          <option value="0.25">Quarter res</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Shader parameters</h2>
+          <span class="card-tools">
+            <span class="hint" id="paramsHint"></span>
+            <button id="paramsReset" class="small-btn" title="Reset all parameters to their defaults" hidden>Reset</button>
+          </span>
+        </div>
+        <div id="paramsCustom" class="params"></div>
+        <details id="paramsBuiltinWrap" class="builtins" open>
+          <summary>Built-in inputs <span id="builtinCount" class="hint"></span></summary>
+          <div id="paramsBuiltin" class="builtin-list mono"></div>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 id="channelsTitle">Input channels</h2>
+          <span class="hint">iChannel0–3 of the selected tab · click a slot or drop an image on it</span>
+        </div>
+        <div class="channels" id="channels"></div>
+        <div id="channelsNote" class="params-empty" hidden>Common code has no inputs of its own. Select the Image tab or a Buffer tab to set its channels.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Export</h2>
+          <span class="hint">Frame-accurate offline render via WebCodecs</span>
+        </div>
+        <div class="grid">
+          <label>Resolution
+            <select id="resSelect">
+              <option value="1920x1080">1080p · 1920×1080</option>
+              <option value="3840x2160">4K UHD · 3840×2160</option>
+              <option value="1080x1920">1080p vertical · 1080×1920</option>
+              <option value="2160x3840">4K vertical · 2160×3840</option>
+            </select>
+          </label>
+          <label>Frame rate
+            <select id="fpsSelect">
+              <option value="24">24 fps</option>
+              <option value="25">25 fps</option>
+              <option value="30">30 fps</option>
+              <option value="50">50 fps</option>
+              <option value="60" selected>60 fps</option>
+            </select>
+          </label>
+          <label>Start time (s)
+            <input type="number" id="startInput" value="0" min="0" step="0.1">
+          </label>
+          <label>Duration (s)
+            <input type="number" id="durationInput" value="10" min="0.1" step="0.1">
+          </label>
+          <label>Codec
+            <select id="codecSelect">
+              <option value="avc">H.264 (most compatible)</option>
+              <option value="hevc">H.265 / HEVC</option>
+              <option value="vp9">VP9</option>
+              <option value="av1">AV1</option>
+            </select>
+          </label>
+          <label>Quality
+            <select id="qualitySelect">
+              <option value="0.08">Standard</option>
+              <option value="0.16" selected>High</option>
+              <option value="0.32">Very high</option>
+            </select>
+          </label>
+          <label>Bitrate (Mbps)
+            <input type="number" id="bitrateInput" min="1" max="500" step="1" value="20">
+          </label>
+          <label>Antialiasing
+            <select id="ssSelect">
+              <option value="1">Off</option>
+              <option value="2">2×2 supersampling</option>
+            </select>
+          </label>
+        </div>
+        <label class="check" id="toDiskRow" hidden>
+          <input type="checkbox" id="toDisk">
+          Stream straight to a file on disk (best for long or 4K renders)
+        </label>
+        <div id="exportSummary" class="summary"></div>
+        <div class="actions">
+          <button id="exportBtn" class="primary big">Export MP4</button>
+          <button id="pngBtn" title="Render the current preview time at export resolution">Save PNG frame</button>
+          <button id="cancelBtn" class="danger" hidden>Cancel</button>
+        </div>
+        <div id="progress" class="progress" hidden>
+          <div class="bar"><div id="progressFill"></div></div>
+          <div id="progressText" class="mono"></div>
+        </div>
+        <div id="exportMsg" class="msg" role="status"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="dropHint" class="drop-hint" hidden><div>Drop a shader file to open it</div></div>
+
+  <div id="imgShaderDialog" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="i2sTitle">
+      <div class="modal-head">
+        <h2 id="i2sTitle">Image → Shader</h2>
+        <button id="i2sClose" class="icon" title="Close (Esc)" aria-label="Close">✕</button>
+      </div>
+      <div class="i2s-body">
+        <div class="i2s-left">
+          <div id="i2sDrop" class="i2s-drop" tabindex="0" role="button" aria-label="Choose an image">
+            <img id="i2sPreview" alt="Selected image" hidden>
+            <div id="i2sDropHint" class="i2s-drop-hint">
+              <b>Drop an image here</b>, click to choose one,<br>or paste a screenshot (Ctrl+V)
+            </div>
+          </div>
+          <input type="file" id="i2sFile" accept="image/*" hidden>
+        </div>
+        <div class="i2s-right">
+          <div id="i2sAnalysis" class="i2s-analysis"><span class="muted">The palette, colour layout, brightness, texture and any bright particles will appear here.</span></div>
+          <label class="i2s-notes-label ai-only" for="i2sNotes">Notes for Claude <span class="muted">(optional: what to emphasise, mood, motion)</span></label>
+          <textarea id="i2sNotes" class="ai-only" rows="2" placeholder="e.g. slow drifting motion, make the glow pulse gently"></textarea>
+        </div>
+      </div>
+      <div class="i2s-actions">
+        <button id="i2sAnimate" title="No AI: uses the image itself as a texture and brings it to life (flow, twinkling highlights, glow, light sweep)">Animate this image</button>
+        <button id="i2sStarter" title="No AI: builds a procedural shader from the measured palette, colour layout, texture and particles">Procedural shader</button>
+        <button id="i2sClaude" class="primary ai-only" title="Claude looks at the image and writes a full shader">Generate with Claude</button>
+        <button id="i2sRefine" class="ai-only" title="Renders the current shader and asks Claude to bring it closer to the image">Refine with Claude</button>
+        <label class="check small ai-only" title="If the generated shader doesn't compile, send the errors back to Claude automatically (up to 2 times)"><input type="checkbox" id="i2sAutoFix" checked> Auto-fix errors</label>
+      </div>
+      <div id="i2sStatus" class="i2s-status" role="status"></div>
+      <div id="i2sClaudeInfo" class="i2s-claude-info ai-only"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.min.js"></script>
+  <script src="js/examples.js"></script>
+  <script src="js/examples-extra.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/exporter.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/image2shader.js"></script>
+</body>
+</html>
