@@ -226,3 +226,13 @@ and reload the app. Each file also opens directly with **Open**.
 - If the disk or storage fills up, the export stops straight away with a message, instead of
   failing after the render.
 - No keyboard, audio, video or cubemap inputs.
+
+## License
+
+Shader Render is free software, licensed under the GNU General Public License, version 3 or
+(at your option) any later version (GPL-3.0-or-later). See [LICENSE](LICENSE).
+
+This covers the app and the original shaders in this repository, including the "Study"
+examples. Third-party code keeps its own licence: the Vidvox ISF examples are MIT, which is
+compatible with the GPL. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Videos and images
+you render with the app are yours; the GPL doesn't apply to them.

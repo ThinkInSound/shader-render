@@ -1,5 +1,8 @@
 # Third-party notices
 
+Shader Render itself is licensed under GPL-3.0-or-later (see [LICENSE](LICENSE)). This file lists
+the third-party code and assets it includes or loads, and their licences.
+
 ## Example shaders
 
 ### Vidvox ISF-Files (MIT License)
@@ -39,7 +42,7 @@ Stefan Gustavson, distributed under the MIT License (credited in their shader he
 ### Studies
 
 The examples named "Study: …", in `shaders/studies/`, are original shaders written for
-Shader Render. They cover techniques also taught in *The Book of Shaders*, but they don't
+Shader Render and licensed under GPL-3.0-or-later with the rest of the app. They cover techniques also taught in *The Book of Shaders*, but they don't
 contain its code. The Book of Shaders and its examples are "all rights reserved" by
 Patricio Gonzalez Vivo, so none of them are bundled here.
 
