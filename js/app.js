@@ -1199,8 +1199,80 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   el.saveBtn.addEventListener('click', saveProject);
   el.openBtn.addEventListener('click', () => el.fileInput.click());
 
+  /**
+   * Imports Shadertoy JSON or an ISF shader (see js/importers.js) as a new project.
+   * Returns { name, warnings }, or null if the user cancelled.
+   */
+  async function importText(text, fileName = '') {
+    const I = window.ShaderImporters;
+    if (!I) throw new Error('The importer didn’t load.');
+    const kind = I.detect(text);
+    if (kind === 'shadertoy') {
+      const res = I.parseShadertoy(text);
+      if (state.modified && !confirm(`Replace the current project with “${res.name}”? Unsaved edits will be lost.`)) return null;
+      const specs = {};
+      for (const [id, p] of Object.entries(res.project.passes)) {
+        specs[id] = { code: p.code, channels: p.channels.map((c) => (c && c.kind === 'buffer' ? c : null)) };
+      }
+      const slugName = res.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'shadertoy';
+      loadProject({ common: res.project.common, passes: specs }, `${slugName}.shader.json`);
+      // Textures load in the background from shadertoy.com (which allows this)
+      const warnings = res.warnings.slice();
+      await Promise.all(res.textures.map(async (t) => {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = t.url;
+          await img.decode();
+          setChannelFor(t.pass, t.channel, {
+            kind: 'image', name: t.url.split('/').pop(), source: img, width: img.naturalWidth, height: img.naturalHeight,
+            thumb: t.url, filter: t.filter, wrap: t.wrap, flip: t.flip,
+          });
+        } catch (_) {
+          warnings.push(`Couldn’t load the texture for ${t.pass === 'image' ? 'Image' : `Buffer ${t.pass}`} iChannel${t.channel}.`);
+        }
+      }));
+      return { name: res.name, warnings };
+    }
+    if (kind === 'isf') {
+      // ISF is desktop GLSL: try WebGL's GLSL ES 3.00 first, then 1.00, and keep whichever compiles
+      let res = I.convertISF(text, fileName || 'shader.fs', { glsl: 300 });
+      const probe = new ShaderRenderer(document.createElement('canvas'));
+      try {
+        if (!probe.compilePass('image', res.code).ok) {
+          const alt = I.convertISF(text, fileName || 'shader.fs', { glsl: 100 });
+          if (probe.compilePass('image', alt.code).ok) res = alt;
+        }
+      } finally {
+        probe.dispose();
+      }
+      if (state.modified && !confirm(`Replace the current project with “${res.name}”? Unsaved edits will be lost.`)) return null;
+      const base = (fileName || res.name).replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'isf';
+      loadProject({ code: res.code }, `${base}.glsl`);
+      const errors = window.shaderApp.compileErrors();
+      return { name: res.name, warnings: errors ? [...res.warnings, `Compile errors (ISF is desktop GLSL; some shaders need small fixes for WebGL):\n${errors}`] : res.warnings };
+    }
+    if (kind === 'project') {
+      const spec = JSON.parse(text);
+      if (state.modified && !confirm('Replace the current project? Unsaved edits will be lost.')) return null;
+      loadProject(spec, fileName || 'project.shader.json', { active: spec.active });
+      return { name: fileName || 'project', warnings: [] };
+    }
+    throw new Error('That doesn’t look like Shadertoy JSON, an ISF shader or a Shader Render project.');
+  }
+
   async function openShaderFile(file) {
     const text = await file.text();
+    const imported = window.ShaderImporters && window.ShaderImporters.detect(text);
+    if (imported === 'shadertoy' || imported === 'isf') {
+      try {
+        const res = await importText(text, file.name);
+        if (res && res.warnings.length) alert(`Imported “${res.name}” with notes:\n\n${res.warnings.join('\n')}`);
+      } catch (e) {
+        alert(e.message);
+      }
+      return;
+    }
     if (/\.json$/i.test(file.name)) {
       let spec;
       try { spec = JSON.parse(text); } catch (_) { spec = null; }
@@ -1422,6 +1494,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     state, cm, compile, tabs, addTab, switchTab, loadProject, projectData,
     exportProject, currentParamValues,
     get renderer() { return renderer; },
+    importText,
     imageCode: () => tabs.get('image').doc.getValue(),
     /** Sets shader parameter values ({ name: number[] }) as if the sliders had been moved. */
     setParamValues(values) {

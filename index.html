@@ -14,14 +14,15 @@
       <select id="exampleSelect" title="Load an example shader">
         <option value="" selected disabled>Examples…</option>
       </select>
-      <button id="openBtn" title="Open a .glsl / .frag file (or drop one on the window)">Open…</button>
+      <button id="openBtn" title="Open a shader, project, Shadertoy JSON or ISF file (or drop one on the window)">Open…</button>
       <button id="saveBtn" title="Download the shader (Ctrl+S)">Save</button>
+      <button id="importBtn" title="Import a Shadertoy shader (JSON) or an ISF shader">Import…</button>
       <button id="imgShaderBtn" title="Turn a screenshot or image into a shader">Image → Shader</button>
       <span class="sep"></span>
       <label class="check"><input type="checkbox" id="autoCompile" checked> Auto-compile</label>
       <button id="compileBtn" class="primary" title="Compile (Ctrl+Enter)">Compile <kbd>Ctrl ↵</kbd></button>
     </div>
-    <input type="file" id="fileInput" accept=".glsl,.frag,.fs,.fsh,.shader,.txt,text/plain" hidden>
+    <input type="file" id="fileInput" accept=".glsl,.frag,.fs,.fsh,.isf,.shader,.json,.txt,text/plain,application/json" hidden>
   </header>
 
   <div id="banner" class="banner" hidden></div>
@@ -171,6 +172,39 @@
 
   <div id="dropHint" class="drop-hint" hidden><div>Drop a shader file to open it</div></div>
 
+  <div id="importDialog" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="impTitle">
+      <div class="modal-head">
+        <h2 id="impTitle">Import a shader</h2>
+        <button id="impClose" class="icon" title="Close (Esc)" aria-label="Close">✕</button>
+      </div>
+      <p class="imp-help">
+        Paste <b>Shadertoy JSON</b> or an <b>ISF shader</b> (<code>.fs</code>), or choose a file.
+        Shadertoy imports keep Common, Buffer A–D and the Image pass, buffer and texture channels,
+        and the author and link. Keyboard, sound, video, webcam and cubemap inputs aren’t supported.
+      </p>
+      <details class="imp-how">
+        <summary>How do I get a Shadertoy shader’s JSON?</summary>
+        <ol>
+          <li>Sign in at shadertoy.com, open <b>Profile → Apps</b> (shadertoy.com/myapps) and create a free app key.</li>
+          <li>In your browser, open <code>https://www.shadertoy.com/api/v1/shaders/SHADER_ID?key=YOUR_KEY</code>, where
+            SHADER_ID is the code at the end of the shader’s URL (shadertoy.com/view/<b>XsXXDn</b>).</li>
+          <li>Copy the JSON it shows and paste it here, or save it and choose the file. Only shaders their authors
+            published as “Public + API” can be fetched this way.</li>
+        </ol>
+        <p class="muted">Shadertoy shaders are CC BY-NC-SA 3.0 (non-commercial) unless their author says
+          otherwise. Check the licence before using one in commercial work.</p>
+      </details>
+      <textarea id="impText" class="imp-text" rows="10" spellcheck="false" placeholder='{"Shader": {"info": {...}, "renderpass": [...]}}   or   /*{ "ISFVSN": "2", "INPUTS": [...] }*/ ...'></textarea>
+      <div class="i2s-actions">
+        <button id="impGo" class="primary">Import</button>
+        <button id="impChoose">Choose a file…</button>
+        <input type="file" id="impFile" accept=".json,.fs,.isf,.frag,.glsl,.txt,application/json,text/plain" hidden>
+      </div>
+      <div id="impStatus" class="i2s-status" role="status"></div>
+    </div>
+  </div>
+
   <div id="imgShaderDialog" class="modal" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="i2sTitle">
       <div class="modal-head">
@@ -223,6 +257,7 @@
   <script src="js/renderer.js"></script>
   <script src="js/exporter.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/importers.js"></script>
   <script src="js/style-library.js"></script>
   <script src="js/image2shader.js"></script>
 </body>

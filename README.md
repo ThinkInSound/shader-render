@@ -50,6 +50,38 @@ Use a current Chrome or Edge for the widest codec support. Video export needs We
 Raw shaders can declare any of these uniforms: `u_time`, `u_resolution`, `u_mouse`, `u_frame`,
 `u_delta`, `time`, `resolution`, `mouse`, `u_tex0-3`, plus all the Shadertoy names.
 
+## Examples
+
+The Examples menu has 45 shaders:
+
+- Hand-made pieces (bokeh sparkles, lemon gold, ancient green, water, lava, storms, shadows…)
+- **Study:** 13 originals, each focused on one technique: fbm clouds, Voronoi stained glass,
+  nebula, plasma, kaleidoscope, synthwave grid, snowfall, fireflies, topographic contours,
+  halftone, op art, northern lights, underwater light
+- **ISF:** 14 generators from [Vidvox ISF-Files](https://github.com/Vidvox/ISF-Files) (MIT),
+  converted with the ISF importer
+
+Credits and licences are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). To add your own,
+see `shaders/build_examples.py`.
+
+## Importing shaders
+
+**Import…** (or Open, or drag and drop) accepts:
+
+- **Shadertoy JSON:** keeps the Common, Buffer A–D and Image passes, buffer and texture channels
+  (textures load from shadertoy.com), and adds the author, link and licence to the code.
+  Keyboard, sound, video, webcam and cubemap inputs aren't supported and read black. To get a
+  shader's JSON, create a free app key at shadertoy.com/myapps, then open
+  `https://www.shadertoy.com/api/v1/shaders/SHADER_ID?key=YOUR_KEY` in your browser; this works
+  for shaders their authors published as "Public + API". Shadertoy shaders are CC BY-NC-SA 3.0
+  (non-commercial) unless their author says otherwise.
+- **ISF (`.fs`):** converts the JSON header's inputs into sliders (float, int, bool, colour,
+  point) and maps ISF's built-ins (`TIME`, `RENDERSIZE`, `isf_FragNormCoord`, `IMG_PIXEL`…) onto
+  Shader Render's. Image inputs read `iChannel0`–`3`, so ISF filters work on an image you load
+  there. ISF is written for desktop GLSL, so a few shaders need small fixes for WebGL; the
+  importer reports compile errors. Multi-pass ISF and custom vertex shaders aren't supported.
+- **Shader Render projects** (`.shader.json`).
+
 ## Image → Shader
 
 Click **Image → Shader**, then drop in an image, choose one, or paste a screenshot (Ctrl+V).

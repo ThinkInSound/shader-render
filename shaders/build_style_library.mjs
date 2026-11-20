@@ -62,6 +62,62 @@ const STYLES = [
     'organic coral like reaction diffusion pattern', 'brain coral maze pattern', 'leopard spots and stripes pattern'] },
   { file: 'rings-params.glsl', prompts: [
     'hypnotic concentric wavy rings', 'psychedelic pink and blue ripples', 'flower shaped wavy circles pattern'] },
+  // Studies (originals)
+  { file: 'studies/clouds.glsl', prompts: [
+    'white fluffy clouds in a blue sky', 'cloudy sky with patches of blue', 'cumulus clouds drifting in daylight'] },
+  { file: 'studies/stained_glass.glsl', prompts: [
+    'colourful stained glass window', 'mosaic of coloured glass pieces with dark lead lines', 'church window of red blue and yellow glass'] },
+  { file: 'studies/nebula.glsl', prompts: [
+    'colourful nebula in deep space with stars', 'purple and blue galaxy gas clouds', 'starfield with glowing cosmic dust'] },
+  { file: 'studies/plasma.glsl', prompts: [
+    'retro psychedelic plasma colours', 'smooth rainbow gradient waves', 'trippy pastel colour swirls'] },
+  { file: 'studies/kaleidoscope.glsl', prompts: [
+    'kaleidoscope mandala pattern', 'symmetrical radial ornament with glowing dots', 'mirrored colourful kaleidoscope'] },
+  { file: 'studies/synthwave.glsl', prompts: [
+    'retro synthwave sunset with a neon grid', '80s outrun striped sun over a grid', 'vaporwave neon landscape'] },
+  { file: 'studies/snowfall.glsl', prompts: [
+    'snow falling at night', 'snowflakes in a dark winter sky', 'snowfall lit by a street lamp'] },
+  { file: 'studies/fireflies.glsl', prompts: [
+    'fireflies glowing over a dark forest at dusk', 'treeline silhouette at twilight with glowing specks', 'summer night meadow with fireflies'] },
+  { file: 'studies/topographic.glsl', prompts: [
+    'topographic map with contour lines', 'terrain elevation map', 'contour lines on a shaded relief map'] },
+  { file: 'studies/halftone.glsl', prompts: [
+    'halftone dot pattern in comic style', 'pop art print dots', 'newspaper print dot screen'] },
+  { file: 'studies/op_art.glsl', prompts: [
+    'black and white op art stripes', 'optical illusion wavy lines', 'moire pattern of warped stripes'] },
+  { file: 'studies/northern_lights.glsl', prompts: [
+    'aurora borealis over mountains', 'green northern lights in the night sky', 'polar lights above snowy peaks'] },
+  { file: 'studies/underwater.glsl', prompts: [
+    'underwater sun rays in blue water', 'ocean floor with light rays and caustics', 'deep blue sea seen from below the surface'] },
+  // Vidvox ISF generators
+  { file: 'isf/worley_cells.glsl', prompts: [
+    'cellular pattern of irregular cells', 'voronoi cell texture like cracked tiles', 'mosaic of irregular blue and yellow cells'] },
+  { file: 'isf/ridgelines.glsl', prompts: [
+    'white noise ridges on black', 'electric veins texture', 'wrinkled white lines on black'] },
+  { file: 'isf/simplex_noise.glsl', prompts: [
+    'grey cloudy noise texture', 'smooth monochrome noise', 'grainy grey smoke texture'] },
+  { file: 'isf/random_lines.glsl', prompts: [
+    'random green lines crossing', 'abstract scattered straight lines', 'tangle of glowing straight lines'] },
+  { file: 'isf/noise.glsl', prompts: [
+    'colourful pixel noise grid', 'random coloured squares mosaic', 'glitchy blocks of colour'] },
+  { file: 'isf/grid_warp.glsl', prompts: [
+    'warped grid lines', 'distorted orange mesh grid on black', 'bulging wireframe grid'] },
+  { file: 'isf/graph_paper.glsl', prompts: [
+    'graph paper', 'blue grid lines on white paper', 'engineering grid paper'] },
+  { file: 'isf/spiral.glsl', prompts: [
+    'black and white spiral', 'hypnotic spiral line', 'white swirl on black'] },
+  { file: 'isf/star.glsl', prompts: [
+    'single pink star shape on black', 'simple star icon', 'five pointed star'] },
+  { file: 'isf/heart.glsl', prompts: [
+    'red heart shape on black', 'love heart symbol', 'simple red heart icon'] },
+  { file: 'isf/sine_warp_gradient.glsl', prompts: [
+    'soft blurry colour gradient', 'smooth gradient background blue and orange', 'warm and cool blurred gradient'] },
+  { file: 'isf/random_checkerboard.glsl', prompts: [
+    'pastel colour block grid', 'random coloured tiles', 'grid of soft coloured squares'] },
+  { file: 'isf/checkerboard.glsl', prompts: [
+    'black and white checkerboard', 'chessboard pattern', 'large checkered squares'] },
+  { file: 'isf/color_scales.glsl', prompts: [
+    'horizontal colour stripes', 'colour swatch bands', 'striped bands of red yellow and blue'] },
 ];
 
 const normalize = (v) => {
