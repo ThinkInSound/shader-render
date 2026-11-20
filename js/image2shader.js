@@ -709,11 +709,13 @@ ${p.present ? '    col += sparkles(uv, t) * sparkle;\n' : ''}
     el.matches.hidden = false;
   }
 
-  // Colour uniforms annotated "// color r g b" in a shader's source
+  // Colour uniforms annotated "// color r g b [a]" (vec3 or vec4) in a shader's source
   function colorUniforms(src) {
-    return [...src.matchAll(/^[ \t]*uniform\s+vec3\s+(\w+)\s*;\s*\/\/\s*colou?r\s+([-\d.\s]+)/gmi)].map((m) => {
-      const def = m[2].trim().split(/\s+/).map(Number).slice(0, 3);
-      return { name: m[1], def, lum: 0.2126 * def[0] + 0.7152 * def[1] + 0.0722 * def[2] };
+    return [...src.matchAll(/^[ \t]*uniform\s+(vec3|vec4)\s+(\w+)\s*;\s*\/\/\s*colou?r\s+([-\d.\s]+)/gmi)].map((m) => {
+      const comps = m[1] === 'vec4' ? 4 : 3;
+      const def = m[3].trim().split(/\s+/).map(Number).slice(0, comps);
+      while (def.length < comps) def.push(def.length === 3 ? 1 : 0);
+      return { name: m[2], comps, def, lum: 0.2126 * def[0] + 0.7152 * def[1] + 0.0722 * def[2] };
     });
   }
 
@@ -739,27 +741,69 @@ ${p.present ? '    col += sparkles(uv, t) * sparkle;\n' : ''}
     return Array.from({ length: n }, (_, i) => pal[Math.round(i * (pal.length - 1) / (n - 1))]);
   }
 
-  // For shaders without colour sliders: wrap the Image pass so its tones are mapped onto the image's palette
-  function withPaletteGrade(code) {
-    if (!/\bvoid\s+mainImage\s*\(/.test(code)) return null;
+  // The image colours the palette grade uses (set explicitly on every load, see loadStyle)
+  function gradeColors() {
     const [dark, mid, light] = paletteRamp(3);
+    return { paletteDark: dark, paletteMid: mid, paletteLight: light };
+  }
+
+  // For shaders without colour sliders: wrap the Image pass so its tones are mapped onto the
+  // image's palette. Works for Shadertoy-style (mainImage), GLSL ES 3.00 (own "out vec4") and
+  // GLSL ES 1.00 (gl_FragColor) shaders. Returns null if the shader's structure isn't recognised.
+  function withPaletteGrade(code) {
+    const g = gradeColors();
     const f = (c) => c.map((v) => fnum(v)).join(' ');
-    return code.replace(/\bvoid\s+mainImage\s*\(/, 'void styleSourceImage(') + `
+    const block = `
 
 // ---- Added by Image -> Shader: maps this shader's tones onto the source image's palette
 uniform float paletteMatch;  // 0 1 0.65
-uniform vec3  paletteDark;   // color ${f(dark)}
-uniform vec3  paletteMid;    // color ${f(mid)}
-uniform vec3  paletteLight;  // color ${f(light)}
+uniform vec3  paletteDark;   // color ${f(g.paletteDark)}
+uniform vec3  paletteMid;    // color ${f(g.paletteMid)}
+uniform vec3  paletteLight;  // color ${f(g.paletteLight)}
 
+vec3 imagePaletteGrade(vec3 c) {
+    float l = clamp(dot(c, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+    vec3 g = l < 0.5 ? mix(paletteDark, paletteMid, l * 2.0) : mix(paletteMid, paletteLight, l * 2.0 - 1.0);
+    return mix(c, g, paletteMatch);
+}
+`;
+    // Shadertoy style
+    if (/\bvoid\s+mainImage\s*\(/.test(code)) {
+      return code.replace(/\bvoid\s+mainImage\s*\(/, 'void styleSourceImage(') + block + `
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec4 c = vec4(0.0, 0.0, 0.0, 1.0);
     styleSourceImage(c, fragCoord);
-    float l = clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
-    vec3 g = l < 0.5 ? mix(paletteDark, paletteMid, l * 2.0) : mix(paletteMid, paletteLight, l * 2.0 - 1.0);
-    fragColor = vec4(mix(c.rgb, g, paletteMatch), c.a);
+    fragColor = vec4(imagePaletteGrade(c.rgb), c.a);
 }
 `;
+    }
+    const mainDef = /\bvoid\s+main\s*\(\s*(?:void)?\s*\)/;
+    if (!mainDef.test(code)) return null;
+    // GLSL ES 3.00 with its own output variable
+    const out = /^[ \t]*(?:layout\s*\([^)]*\)\s*)?out\s+(?:(?:lowp|mediump|highp)\s+)?vec4\s+(\w+)\s*;/m.exec(code);
+    if (out) {
+      const v = out[1];
+      return code.replace(mainDef, 'void styleSourceMain()') + block + `
+void main() {
+    styleSourceMain();
+    ${v} = vec4(imagePaletteGrade(${v}.rgb), ${v}.a);
+}
+`;
+    }
+    // GLSL ES 1.00 writing gl_FragColor: write to our own variable, then grade it
+    if (/\bgl_FragColor\b/.test(code)) {
+      let src = code.replace(/\bgl_FragColor\b/g, 'styleFragColor');
+      const prec = /\bprecision\s+(?:lowp|mediump|highp)\s+float\s*;/.exec(src);
+      const at = prec ? prec.index + prec[0].length : 0;
+      src = src.slice(0, at) + '\nvec4 styleFragColor;\n' + src.slice(at);
+      return src.replace(mainDef, 'void styleSourceMain()') + block + `
+void main() {
+    styleSourceMain();
+    gl_FragColor = vec4(imagePaletteGrade(styleFragColor.rgb), styleFragColor.a);
+}
+`;
+    }
+    return null;
   }
 
   function loadStyle(example) {
@@ -769,26 +813,36 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     const allSrc = spec.code || [spec.common || '', ...Object.values(spec.passes).map((p) => p.code)].join('\n');
     const colors = colorUniforms(allSrc);
     let how = '';
+    let graded = false;
 
     if (recolor && !colors.length) {
       const target = spec.code != null ? 'code' : 'image';
-      const graded = withPaletteGrade(target === 'code' ? spec.code : spec.passes.image.code);
-      if (graded) {
-        if (target === 'code') spec.code = graded; else spec.passes.image.code = graded;
+      const wrapped = withPaletteGrade(target === 'code' ? spec.code : spec.passes.image.code);
+      if (wrapped) {
+        if (target === 'code') spec.code = wrapped; else spec.passes.image.code = wrapped;
+        graded = true;
         how = ' A palette-match grade maps its colours onto the image’s (see the paletteMatch slider).';
+      } else {
+        how = ' Its colours couldn’t be changed automatically (no colour sliders, and its structure isn’t one the palette grade can wrap).';
       }
     }
     const isProject = !spec.code;
     app.loadProject(spec, `${slug(example.name)}-${slug(state.imageName)}.${isProject ? 'shader.json' : 'glsl'}`);
 
+    // Slider values are remembered by name, so always set them explicitly: the image's colours
+    // when recolouring, otherwise the shader's own defaults (never colours left over from earlier)
     if (recolor && colors.length) {
       // Darkest slider gets the darkest image colour, brightest gets the brightest
       const byLum = colors.slice().sort((a, b) => a.lum - b.lum);
       const ramp = paletteRamp(byLum.length, { forSliders: true });
       const values = {};
-      byLum.forEach((c, i) => { values[c.name] = ramp[i].slice(); });
+      byLum.forEach((c, i) => { values[c.name] = c.comps === 4 ? [...ramp[i].slice(0, 3), c.def[3]] : ramp[i].slice(0, 3); });
       app.setParamValues(values);
-      how = ` Its colours (${byLum.map((c) => c.name).join(', ')}) now come from the image; use Reset in Shader parameters for the originals.`;
+      how = ` Its colours (${byLum.map((c) => c.name).join(', ')}) now come from the image; untick “Use the image’s colours” and load it again for the originals.`;
+    } else if (graded) {
+      app.setParamValues(gradeColors());
+    } else if (colors.length) {
+      app.resetParamValues(colors.map((c) => c.name));
     }
     const errors = app.compileErrors();
     state.lastFromClaude = false;

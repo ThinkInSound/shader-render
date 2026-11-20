@@ -1510,6 +1510,13 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
       buildParams();
       state.dirty = true;
     },
+    /** Forgets remembered values for these parameters, so they go back to the shader's defaults. */
+    resetParamValues(names) {
+      names.forEach((n) => { delete paramValues[n]; });
+      saveParams();
+      buildParams();
+      state.dirty = true;
+    },
     /** Puts an image into one of the Image pass's channels (mipmapped, clamped, upright). */
     setImageChannel(i, source, name, thumbUrl) {
       setChannelFor('image', i, {
