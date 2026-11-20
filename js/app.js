@@ -1238,13 +1238,22 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
   let dragDepth = 0;
   const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
-  window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; dragDepth++; el.dropHint.hidden = false; });
+  const modalOpen = () => !!document.querySelector('.modal:not([hidden])');
+  const hideDropHint = () => { dragDepth = 0; el.dropHint.hidden = true; };
+  window.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e) || modalOpen()) return;   // dialogs handle their own drops
+    dragDepth++;
+    el.dropHint.hidden = false;
+  });
   window.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) el.dropHint.hidden = true; });
   window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+  // Capture phase: runs for every drop, even ones a drop zone stops from bubbling,
+  // so the overlay can never get stuck on screen
+  window.addEventListener('drop', hideDropHint, true);
+  window.addEventListener('dragend', hideDropHint, true);
   window.addEventListener('drop', (e) => {
     e.preventDefault();
-    dragDepth = 0;
-    el.dropHint.hidden = true;
+    if (modalOpen()) return;                    // e.g. Image -> Shader takes the file itself
     const f = e.dataTransfer.files[0];
     if (!f) return;
     if (f.type.startsWith('image/')) {

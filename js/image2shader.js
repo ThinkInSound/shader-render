@@ -105,6 +105,13 @@
     e.preventDefault(); e.stopPropagation();
     el.drop.classList.remove('drag');
     const f = e.dataTransfer.files[0];
+    if (f && !state.busy) loadFile(f);
+  });
+  // While the dialog is open, an image dropped anywhere on the page goes into it
+  window.addEventListener('drop', (e) => {
+    if (el.dialog.hidden || state.busy) return;
+    e.preventDefault();
+    const f = e.dataTransfer && e.dataTransfer.files[0];
     if (f) loadFile(f);
   });
   // Paste a screenshot straight from the clipboard while the dialog is open
