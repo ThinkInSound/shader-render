@@ -1423,6 +1423,20 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     exportProject, currentParamValues,
     get renderer() { return renderer; },
     imageCode: () => tabs.get('image').doc.getValue(),
+    /** Sets shader parameter values ({ name: number[] }) as if the sliders had been moved. */
+    setParamValues(values) {
+      for (const [name, value] of Object.entries(values)) {
+        let type = null;
+        for (const id of renderer.passIds()) {
+          const u = renderer.uniformsOf(id).get(name);
+          if (u) { type = glslTypeName(u.type); break; }
+        }
+        if (type) paramValues[name] = { type, value: value.slice() };
+      }
+      saveParams();
+      buildParams();
+      state.dirty = true;
+    },
     /** Puts an image into one of the Image pass's channels (mipmapped, clamped, upright). */
     setImageChannel(i, source, name, thumbUrl) {
       setChannelFor('image', i, {

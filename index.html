@@ -194,6 +194,7 @@
         </div>
       </div>
       <div class="i2s-actions">
+        <button id="i2sMatch" title="Free, runs in your browser: a small image model (CLIP) finds the closest shader in the style library, then recolours it with the image's palette. First use downloads about 90 MB, cached afterwards.">Match a style</button>
         <button id="i2sAnimate" title="No AI: uses the image itself as a texture and brings it to life (flow, twinkling highlights, glow, light sweep)">Animate this image</button>
         <button id="i2sStarter" title="No AI: builds a procedural shader from the measured palette, colour layout, texture and particles">Procedural shader</button>
         <button id="i2sClaude" class="primary ai-only" title="Claude looks at the image and writes a full shader">Generate with Claude</button>
@@ -201,6 +202,13 @@
         <label class="check small ai-only" title="If the generated shader doesn't compile, send the errors back to Claude automatically (up to 2 times)"><input type="checkbox" id="i2sAutoFix" checked> Auto-fix errors</label>
       </div>
       <div id="i2sStatus" class="i2s-status" role="status"></div>
+      <div id="i2sMatches" class="i2s-matches" hidden>
+        <div class="i2s-matches-head">
+          <span>Closest styles</span>
+          <label class="check small" title="Set the shader's colours from the image's palette"><input type="checkbox" id="i2sRecolor" checked> Use the image’s colours</label>
+        </div>
+        <div id="i2sMatchList" class="i2s-match-list"></div>
+      </div>
       <div id="i2sClaudeInfo" class="i2s-claude-info ai-only"></div>
     </div>
   </div>
@@ -215,6 +223,7 @@
   <script src="js/renderer.js"></script>
   <script src="js/exporter.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/style-library.js"></script>
   <script src="js/image2shader.js"></script>
 </body>
 </html>

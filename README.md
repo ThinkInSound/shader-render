@@ -54,9 +54,15 @@ Raw shaders can declare any of these uniforms: `u_time`, `u_resolution`, `u_mous
 
 Click **Image → Shader**, then drop in an image, choose one, or paste a screenshot (Ctrl+V).
 The app measures it straight away (palette, colour layout, brightness, contrast, texture scale
-and direction, bright particles), and then you can choose either of these options. Neither
-uses AI, and both run entirely in your browser:
+and direction, bright particles), and then you can choose any of these options. All of them
+are free, and the image never leaves your browser:
 
+- **Match a style:** a small image model (CLIP ViT-B/32, run in the browser with
+  [transformers.js](https://huggingface.co/docs/transformers.js)) compares the image with every
+  style in the style library and lists the three closest example shaders. Click one to load it,
+  recoloured with the image's palette: its colour sliders are set from the image, or, if it has
+  none, a `paletteMatch` grade maps its colours onto the image's. The first use downloads the
+  model (about 90 MB) from Hugging Face; the browser caches it after that.
 - **Animate this image:** puts the image itself into `iChannel0` and generates a shader that
   brings it to life: gentle flowing distortion, twinkling highlights, a soft glow around bright
   areas, a slow push-in, and an occasional sweep of light. This gives the closest match, because
@@ -66,6 +72,23 @@ uses AI, and both run entirely in your browser:
   palette, texture direction and scale, vein-like ridges for busy textures, and particle discs
   where the image had round highlights. It's fully resolution-independent, but a loose
   interpretation rather than a close copy. Use it as a starting point and tweak the sliders.
+
+### Adding styles to Match a style
+
+The style library lives in `shaders/build_style_library.mjs`: each entry names an example shader
+and gives a few short descriptions of the kind of image it suits. After adding an example
+(see `shaders/build_examples.py`) and a style entry for it, rebuild `js/style-library.js`:
+
+```bash
+npm install --no-save @huggingface/transformers@4.3.2
+```
+
+```bash
+node shaders/build_style_library.mjs --test path/to/an-image.jpg
+```
+
+`--test` is optional; it prints the top matches for an image so you can check the descriptions.
+Shaders with `// color r g b` sliders are recoloured most faithfully.
 
 ### Optional: Claude (local launcher only)
 

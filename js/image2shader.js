@@ -19,6 +19,7 @@
     drop: $('i2sDrop'), file: $('i2sFile'), preview: $('i2sPreview'), dropHint: $('i2sDropHint'),
     analysis: $('i2sAnalysis'), notes: $('i2sNotes'),
     starterBtn: $('i2sStarter'), animateBtn: $('i2sAnimate'), claudeBtn: $('i2sClaude'), refineBtn: $('i2sRefine'),
+    matchBtn: $('i2sMatch'), matches: $('i2sMatches'), matchList: $('i2sMatchList'), recolor: $('i2sRecolor'),
     autoFix: $('i2sAutoFix'), status: $('i2sStatus'), claudeInfo: $('i2sClaudeInfo'),
   };
 
@@ -60,6 +61,7 @@
     const claudeOk = !!(st && st.sdk);
     el.starterBtn.disabled = !ready;
     el.animateBtn.disabled = !ready;
+    el.matchBtn.disabled = !ready || !window.STYLE_LIBRARY;
     el.animateBtn.classList.toggle('primary', !document.body.classList.contains('ai-available'));
     el.claudeBtn.disabled = !ready || !claudeOk;
     el.refineBtn.disabled = !ready || !claudeOk || !state.lastFromClaude;
@@ -190,6 +192,12 @@
     const contrast = Math.sqrt(varSum / n);
 
     const palette = kMeansPalette(rgb, n, 6);
+    // True highlight and shadow colours: averages of the brightest 3% and darkest 10% of pixels
+    // (palette entries are cluster averages, which dilute vivid highlights)
+    const order = Array.from(lum.keys()).sort((i, j) => lum[i] - lum[j]);
+    const avgOf = (idx) => [0, 1, 2].map((c) => +(idx.reduce((sum, i) => sum + rgb[i * 3 + c], 0) / Math.max(1, idx.length)).toFixed(3));
+    const shadow = avgOf(order.slice(0, Math.max(1, Math.floor(n * 0.1))));
+    const highlight = avgOf(order.slice(Math.floor(n * 0.97)));
     const particles = findParticles(lum, rgb, w, h, meanLum, contrast);
     // Background layout leaves out particle pixels, so glints don't turn the background grey
     const layout = layoutGrid(rgb, w, h, particles.present ? particles.mask : null);
@@ -200,6 +208,8 @@
       size: [img.naturalWidth, img.naturalHeight],
       aspect: +(img.naturalWidth / img.naturalHeight).toFixed(3),
       palette,
+      shadow,
+      highlight,
       layout,                       // rows from top, columns from left
       brightness: +meanLum.toFixed(3),
       contrast: +contrast.toFixed(3),
@@ -610,6 +620,183 @@ ${p.present ? '    col += sparkles(uv, t) * sparkle;\n' : ''}
   });
 
   // ---------------------------------------------------------------------------
+  // "Match a style": CLIP (a small image model, run in the browser) compares the
+  // image with each style in js/style-library.js; the chosen example shader is
+  // then recoloured with the image's palette. Free and private: nothing leaves
+  // the browser. Model files come from the Hugging Face hub and are cached.
+  // ---------------------------------------------------------------------------
+  const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.min.js';
+  let clipPromise = null;
+
+  function loadClip(onProgress) {
+    if (!clipPromise) {
+      clipPromise = (async () => {
+        const T = await import(TRANSFORMERS_URL);
+        T.env.allowLocalModels = false;
+        const files = {};
+        const progress_callback = (p) => {
+          if (p.status !== 'progress' || !p.total) return;
+          files[p.file] = [p.loaded, p.total];
+          const loaded = Object.values(files).reduce((s, f) => s + f[0], 0);
+          const total = Object.values(files).reduce((s, f) => s + f[1], 0);
+          onProgress(loaded, total);
+        };
+        const model = window.STYLE_LIBRARY.model;
+        const processor = await T.AutoProcessor.from_pretrained(model, { progress_callback });
+        const vision = await T.CLIPVisionModelWithProjection.from_pretrained(model, { dtype: 'q8', progress_callback });
+        return { T, processor, vision };
+      })().catch((e) => { clipPromise = null; throw e; });
+    }
+    return clipPromise;
+  }
+
+  async function imageEmbedding(clip, source) {
+    const c = document.createElement('canvas');
+    const w = source.naturalWidth || source.width, h = source.naturalHeight || source.height;
+    const s = Math.min(1, 512 / Math.max(w, h));
+    c.width = Math.max(1, Math.round(w * s));
+    c.height = Math.max(1, Math.round(h * s));
+    c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+    const inputs = await clip.processor(clip.T.RawImage.fromCanvas(c));
+    const { image_embeds } = await clip.vision(inputs);
+    const v = Array.from(image_embeds.data);
+    const n = Math.hypot(...v) || 1;
+    return v.map((x) => x / n);
+  }
+
+  function rankStyles(embedding) {
+    const examples = window.SHADER_EXAMPLES;
+    const styles = window.STYLE_LIBRARY.styles.filter((s) => examples.some((e) => e.file === s.file));
+    const sims = styles.map((s) => s.embedding.reduce((a, x, i) => a + x * embedding[i], 0));
+    const exps = sims.map((v) => Math.exp(100 * v));        // CLIP's usual logit scale
+    const total = exps.reduce((a, b) => a + b, 0);
+    return styles.map((s, i) => ({ file: s.file, p: exps[i] / total, example: examples.find((e) => e.file === s.file) }))
+      .sort((a, b) => b.p - a.p);
+  }
+
+  el.matchBtn.addEventListener('click', async () => {
+    if (!state.analysis || state.busy) return;
+    state.busy = true;
+    updateButtons();
+    el.matches.hidden = true;
+    setStatus('<span class="spinner"></span>Loading the style model…', 'busy');
+    try {
+      const clip = await loadClip((loaded, total) => {
+        setStatus(`<span class="spinner"></span>Downloading the style model (first time only, cached afterwards)… ${Math.round(loaded / 1e6)} / ${Math.round(total / 1e6)} MB`, 'busy');
+      });
+      setStatus('<span class="spinner"></span>Comparing the image with the style library…', 'busy');
+      const ranked = rankStyles(await imageEmbedding(clip, state.image));
+      showMatches(ranked.slice(0, 3));
+      setStatus(`Closest match: <b>${escapeHtml(ranked[0].example.name)}</b> (${Math.round(ranked[0].p * 100)}%). Pick a style below to load it.`);
+    } catch (e) {
+      console.error(e);
+      setStatus(`Couldn’t run the style model: ${escapeHtml(e.message || String(e))}`, 'err');
+    } finally {
+      state.busy = false;
+      updateButtons();
+    }
+  });
+
+  function showMatches(list) {
+    el.matchList.innerHTML = '';
+    for (const m of list) {
+      const b = document.createElement('button');
+      b.className = 'i2s-match';
+      b.innerHTML = `<span class="name">${escapeHtml(m.example.name)}</span><span class="meter"><i style="width:${Math.max(2, Math.round(m.p * 100))}%"></i></span><span class="pct">${(m.p * 100).toFixed(1)}% match</span>`;
+      b.addEventListener('click', () => loadStyle(m.example));
+      el.matchList.appendChild(b);
+    }
+    el.matches.hidden = false;
+  }
+
+  // Colour uniforms annotated "// color r g b" in a shader's source
+  function colorUniforms(src) {
+    return [...src.matchAll(/^[ \t]*uniform\s+vec3\s+(\w+)\s*;\s*\/\/\s*colou?r\s+([-\d.\s]+)/gmi)].map((m) => {
+      const def = m[2].trim().split(/\s+/).map(Number).slice(0, 3);
+      return { name: m[1], def, lum: 0.2126 * def[0] + 0.7152 * def[1] + 0.0722 * def[2] };
+    });
+  }
+
+  const lumOf = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
+  // n image colours spread from darkest to brightest (from the main palette entries)
+  // Boosts saturation while keeping the brightest channel (shaders brighten and wash out light colours)
+  function vivid(c, amount = 1.8) {
+    const mx = Math.max(...c);
+    return c.map((v) => +Math.max(0, mx - (mx - v) * amount).toFixed(3));
+  }
+
+  // n colours from the image, darkest to brightest. The dark end is the image's real shadow colour.
+  // forSliders: the bright end is the brightest palette colour, made more vivid (for colour
+  // sliders that the shader brightens); otherwise it's the real highlight colour (for the grade).
+  function paletteRamp(n, { forSliders = false } = {}) {
+    const a = state.analysis;
+    const byLum = a.palette.slice(0, Math.max(n, 5)).map((p) => p.rgb).sort((x, y) => lumOf(x) - lumOf(y));
+    const top = forSliders ? vivid(byLum[byLum.length - 1]) : a.highlight;
+    const mids = byLum.filter((c) => lumOf(c) > lumOf(a.shadow) + 0.02 && lumOf(c) < lumOf(top) - 0.02 && c !== byLum[byLum.length - 1]);
+    const pal = [a.shadow, ...mids, top].sort((x, y) => lumOf(x) - lumOf(y));
+    if (n === 1) return [pal[pal.length - 1]];
+    return Array.from({ length: n }, (_, i) => pal[Math.round(i * (pal.length - 1) / (n - 1))]);
+  }
+
+  // For shaders without colour sliders: wrap the Image pass so its tones are mapped onto the image's palette
+  function withPaletteGrade(code) {
+    if (!/\bvoid\s+mainImage\s*\(/.test(code)) return null;
+    const [dark, mid, light] = paletteRamp(3);
+    const f = (c) => c.map((v) => fnum(v)).join(' ');
+    return code.replace(/\bvoid\s+mainImage\s*\(/, 'void styleSourceImage(') + `
+
+// ---- Added by Image -> Shader: maps this shader's tones onto the source image's palette
+uniform float paletteMatch;  // 0 1 0.65
+uniform vec3  paletteDark;   // color ${f(dark)}
+uniform vec3  paletteMid;    // color ${f(mid)}
+uniform vec3  paletteLight;  // color ${f(light)}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec4 c = vec4(0.0, 0.0, 0.0, 1.0);
+    styleSourceImage(c, fragCoord);
+    float l = clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+    vec3 g = l < 0.5 ? mix(paletteDark, paletteMid, l * 2.0) : mix(paletteMid, paletteLight, l * 2.0 - 1.0);
+    fragColor = vec4(mix(c.rgb, g, paletteMatch), c.a);
+}
+`;
+  }
+
+  function loadStyle(example) {
+    if (app.state.modified && !confirm(`Replace the current shader with “${example.name}”? Unsaved edits will be lost.`)) return;
+    const recolor = el.recolor.checked;
+    const spec = JSON.parse(JSON.stringify(example.code ? { code: example.code } : { common: example.common ?? null, passes: example.passes }));
+    const allSrc = spec.code || [spec.common || '', ...Object.values(spec.passes).map((p) => p.code)].join('\n');
+    const colors = colorUniforms(allSrc);
+    let how = '';
+
+    if (recolor && !colors.length) {
+      const target = spec.code != null ? 'code' : 'image';
+      const graded = withPaletteGrade(target === 'code' ? spec.code : spec.passes.image.code);
+      if (graded) {
+        if (target === 'code') spec.code = graded; else spec.passes.image.code = graded;
+        how = ' A palette-match grade maps its colours onto the image’s (see the paletteMatch slider).';
+      }
+    }
+    const isProject = !spec.code;
+    app.loadProject(spec, `${slug(example.name)}-${slug(state.imageName)}.${isProject ? 'shader.json' : 'glsl'}`);
+
+    if (recolor && colors.length) {
+      // Darkest slider gets the darkest image colour, brightest gets the brightest
+      const byLum = colors.slice().sort((a, b) => a.lum - b.lum);
+      const ramp = paletteRamp(byLum.length, { forSliders: true });
+      const values = {};
+      byLum.forEach((c, i) => { values[c.name] = ramp[i].slice(); });
+      app.setParamValues(values);
+      how = ` Its colours (${byLum.map((c) => c.name).join(', ')}) now come from the image; use Reset in Shader parameters for the originals.`;
+    }
+    const errors = app.compileErrors();
+    state.lastFromClaude = false;
+    setStatus(errors ? `Loaded, but it has errors:<br><code>${escapeHtml(errors)}</code>` : `✓ Loaded <b>${escapeHtml(example.name)}</b>.${how}`, errors ? 'err' : 'ok');
+    updateButtons();
+  }
+
+  // ---------------------------------------------------------------------------
   // "Animate this image": the image itself goes into iChannel0 and the shader
   // brings it to life. Closest match to the source, no AI needed.
   // ---------------------------------------------------------------------------
@@ -828,5 +1015,5 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   });
 
   // For testing from the console
-  window.imageToShader = { analyse, starterShader, animatedShader, state };
+  window.imageToShader = { analyse, starterShader, animatedShader, loadClip, imageEmbedding, rankStyles, loadStyle, state };
 })();
